@@ -5,15 +5,21 @@ let package = Package(
     name: "MacSesh",
     platforms: [.macOS(.v14)],
     targets: [
+        // Core logic — importable by both the app and the test runner
+        .target(
+            name: "MacSeshCore",
+            path: "Sources/MacSeshCore"
+        ),
+        // App entry point
         .executableTarget(
             name: "MacSesh",
+            dependencies: ["MacSeshCore"],
             path: "Sources/MacSesh"
         ),
-        // Run with: swift run MacSeshTests
-        // (swift test requires full Xcode install; this runner works with CLT)
+        // Test runner: swift run MacSeshTests
         .executableTarget(
             name: "MacSeshTests",
-            dependencies: ["MacSesh"],
+            dependencies: ["MacSeshCore"],
             path: "Tests/MacSeshTests"
         ),
     ],

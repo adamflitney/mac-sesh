@@ -1,10 +1,5 @@
 import Foundation
-
-// Test runner for use without Xcode (swift run MacSeshTests).
-// Each test() call prints ✓ or ✗ and exits 1 if anything fails.
-//
-// nonisolated(unsafe) opts the counter out of Swift 6's actor isolation —
-// safe here because the tests run single-threaded on the main thread.
+@testable import MacSeshCore
 
 nonisolated(unsafe) var failures = 0
 
@@ -29,10 +24,35 @@ struct Fail: Error, CustomStringConvertible {
     init(_ d: String) { description = d }
 }
 
-// ── Smoke test ────────────────────────────────────────────────────────────────
+// ── Shell ─────────────────────────────────────────────────────────────────────
 
-test("runner works") {
-    try expect(1 + 1, equals: 2)
+test("Shell.run returns stdout trimmed") {
+    let out = try Shell.run("echo hello")
+    try expect(out, equals: "hello")
+}
+
+test("Shell.run throws on non-zero exit") {
+    var threw = false
+    do {
+        _ = try Shell.run("false")
+    } catch {
+        threw = true
+    }
+    try expect(threw, equals: true)
+}
+
+// ── Tmux ──────────────────────────────────────────────────────────────────────
+
+test("sanitizeSessionName lowercases and replaces spaces") {
+    try expect(sanitizeSessionName("My Project"), equals: "my-project")
+}
+
+test("sanitizeSessionName strips leading and trailing hyphens") {
+    try expect(sanitizeSessionName("  hello  "), equals: "hello")
+}
+
+test("sanitizeSessionName collapses multiple separators") {
+    try expect(sanitizeSessionName("foo/bar/baz"), equals: "foo-bar-baz")
 }
 
 // ── Run ───────────────────────────────────────────────────────────────────────
