@@ -1,5 +1,7 @@
 # mac-sesh
 
+[![Download](https://img.shields.io/github/v/release/adamflitney/mac-sesh?label=download&logo=apple)](https://github.com/adamflitney/mac-sesh/releases/latest)
+
 A native Swift macOS menubar app for managing tmux sessions in Ghostty. Press a global hotkey from any app, type a few characters to fuzzy-search your git projects, and hit Enter — mac-sesh opens the project in a new Ghostty tab (or jumps to its existing one), with a pre-configured tmux session ready to go.
 
 Built as a Raycast-independent replacement for [raycast-sesh](https://github.com/adamflitney/raycast-sesh).
@@ -22,10 +24,21 @@ Projects are ranked by **frecency** — a combination of how recently and how of
 - Ghostty terminal
 - tmux
 
-## Getting started
+## Install
+
+**Download** the latest DMG from [Releases](https://github.com/adamflitney/mac-sesh/releases/latest), open it, and drag MacSesh to `/Applications`.
+
+macOS may block the app on first launch since it is ad-hoc signed but not notarized. To allow it:
 
 ```bash
-# Clone and run
+xattr -dr com.apple.quarantine /Applications/MacSesh.app
+```
+
+Or: right-click MacSesh.app → **Open** → **Open**.
+
+## Build from source
+
+```bash
 git clone https://github.com/adamflitney/mac-sesh.git
 cd mac-sesh
 swift run MacSesh
