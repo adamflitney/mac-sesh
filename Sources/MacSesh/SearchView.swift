@@ -131,9 +131,12 @@ struct SearchView: View {
             model.selectedIndex = 0
         }
         .onAppear {
-            searchFocused = true
             model.loadData()
             installKeyMonitor()
+            // Delay is required: @FocusState set before the NSPanel becomes key is silently ignored
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                searchFocused = true
+            }
         }
         .onDisappear {
             removeKeyMonitor()
@@ -186,7 +189,9 @@ struct SearchView: View {
         let list = model.filtered
         return ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 0) {
+                // VStack (not Lazy) ensures rows are fully replaced when the
+                // filtered list changes — LazyVStack can serve stale cached rows.
+                VStack(spacing: 0) {
                     ForEach(Array(list.enumerated()), id: \.element.id) { index, project in
                         ProjectRow(
                             project: project,
@@ -199,6 +204,9 @@ struct SearchView: View {
                     }
                 }
             }
+            // .id forces the ScrollView to rebuild from scratch when the query changes,
+            // preventing stale scroll position or row identity issues.
+            .id(model.query)
             .onChange(of: model.selectedIndex) { _, idx in
                 withAnimation(.easeInOut(duration: 0.1)) {
                     proxy.scrollTo(idx, anchor: .center)
