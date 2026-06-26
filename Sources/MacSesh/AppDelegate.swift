@@ -1,14 +1,14 @@
 import AppKit
+import Carbon.HIToolbox
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var searchWindow: SearchWindow?
-    private var hotkeyMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
-        requestAccessibilityAndRegisterHotkeys()
+        setupHotkeys()
     }
 
     // MARK: - Menu bar
@@ -18,34 +18,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.button?.image = NSImage(systemSymbolName: "terminal", accessibilityDescription: "mac-sesh")
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Switch Session  ⌘⇧S", action: #selector(openSwitchSession), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Replace Session  ⌘⇧R", action: #selector(openReplaceSession), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Switch Session  \u{2726}S", action: #selector(openSwitchSession), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Replace Session  \u{2726}D", action: #selector(openReplaceSession), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit mac-sesh", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem?.menu = menu
     }
 
-    // MARK: - Global hotkeys
+    // MARK: - Global hotkeys (Carbon — no permission prompt required)
 
-    private func requestAccessibilityAndRegisterHotkeys() {
-        // NSEvent global monitors require Accessibility permission.
-        // AXIsProcessTrustedWithOptions prompts on first launch.
-        if !AXIsProcessTrusted() {
-            // Use the raw string key to avoid Swift 6 concurrency issues with the C global
-            let opts = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-            AXIsProcessTrustedWithOptions(opts)
+    private func setupHotkeys() {
+        // Hyper key = Cmd+Ctrl+Option+Shift (Caps Lock remapped via Karabiner or similar)
+        let hyper = cmdKey | controlKey | optionKey | shiftKey  // = 6912
+
+        registerGlobalHotkey(keyCode: Int(kVK_ANSI_S), modifiers: hyper) { [weak self] in
+            Task { @MainActor [weak self] in self?.openSwitchSession() }
         }
-
-        hotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard event.modifierFlags.intersection([.command, .shift, .option, .control]) == [.command, .shift] else { return }
-            switch Int(event.keyCode) {
-            case 1:  // S
-                Task { @MainActor [weak self] in self?.openSwitchSession() }
-            case 15: // R
-                Task { @MainActor [weak self] in self?.openReplaceSession() }
-            default:
-                break
-            }
+        registerGlobalHotkey(keyCode: Int(kVK_ANSI_D), modifiers: hyper) { [weak self] in
+            Task { @MainActor [weak self] in self?.openReplaceSession() }
         }
     }
 

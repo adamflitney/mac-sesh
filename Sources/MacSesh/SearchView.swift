@@ -6,116 +6,75 @@ enum SearchMode {
     case replaceSession
 }
 
-struct SearchView: View {
+// MARK: - View Model
+
+@MainActor
+final class SearchViewModel: ObservableObject {
+    @Published var query = ""
+    @Published var allProjects: [Project] = []
+    @Published var activeSessions: Set<String> = []
+    @Published var selectedIndex: Int = 0
+    @Published var errorMessage: String?
+    @Published var isLoading = true
+
     let mode: SearchMode
     let onDismiss: () -> Void
 
-    @State private var query = ""
-    @State private var projects: [Project] = []
-    @State private var activeSessions: Set<String> = []
-    @State private var errorMessage: String?
-    @State private var isLoading = true
-    @FocusState private var searchFocused: Bool
-
-    private var filtered: [Project] {
-        guard !query.isEmpty else { return projects }
-        let q = query.lowercased()
-        return projects.filter {
-            $0.name.lowercased().contains(q) || $0.path.lowercased().contains(q)
-        }
+    init(mode: SearchMode, onDismiss: @escaping () -> Void) {
+        self.mode = mode
+        self.onDismiss = onDismiss
     }
 
-    var body: some View {
-        VStack(spacing: 0) {
-            searchBar
-            Divider()
-            resultArea
-        }
-        .frame(width: 620, height: 420)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(radius: 20)
-        .onAppear {
-            searchFocused = true
-            loadData()
-        }
+    var filtered: [Project] {
+        guard !query.isEmpty else { return allProjects }
+        return allProjects.compactMap { project -> Project? in
+            // Score against the project name; also try the last path component
+            let nameScore = fuzzyScore(query, in: project.name)
+            let lastComponent = project.path.components(separatedBy: "/").last ?? ""
+            let pathScore = lastComponent != project.name ? fuzzyScore(query, in: lastComponent) : nil
+            guard let fuzzy = [nameScore, pathScore].compactMap({ $0 }).max() else { return nil }
+            var p = project
+            // Combine fuzzy score with frecency; frecency is preserved from allProjects ordering
+            p.score = fuzzy + project.score
+            return p
+        }.sorted { $0.score > $1.score }
     }
 
-    // MARK: - Subviews
-
-    private var searchBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField(mode == .switchSession ? "Switch to project..." : "Replace with project...", text: $query)
-                .textFieldStyle(.plain)
-                .focused($searchFocused)
-                .font(.title3)
-                .onKeyPress(.escape) {
-                    onDismiss()
-                    return .handled
-                }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+    var selectedProject: Project? {
+        let list = filtered
+        guard !list.isEmpty, selectedIndex < list.count else { return nil }
+        return list[selectedIndex]
     }
 
-    @ViewBuilder
-    private var resultArea: some View {
-        if isLoading {
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let error = errorMessage {
-            Text(error)
-                .foregroundStyle(.red)
-                .multilineTextAlignment(.center)
-                .padding()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if filtered.isEmpty {
-            Text(query.isEmpty ? "No projects found in configured directories." : "No matches for \"\(query)\"")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            List(filtered) { project in
-                ProjectRow(
-                    project: project,
-                    hasActiveSession: activeSessions.contains(sanitizeSessionName(project.name))
-                )
-                .contentShape(Rectangle())
-                .onTapGesture { selectProject(project) }
-            }
-            .listStyle(.plain)
-        }
+    func clampSelection() {
+        let count = filtered.count
+        guard count > 0 else { selectedIndex = 0; return }
+        selectedIndex = max(0, min(count - 1, selectedIndex))
     }
 
-    // MARK: - Data loading
-
-    private func loadData() {
-        // Shell operations are synchronous but fast (<100ms); running on main
-        // is acceptable here. A future improvement could detach to a background task.
-        Task { @MainActor in
-            defer { isLoading = false }
-            do {
-                let dirs = Settings.projectDirectories
-                let all = findGitProjects(in: dirs)
-                let visits = loadVisits()
-                projects = scored(all, visits: visits)
-                let clients = (try? listClients()) ?? []
-                activeSessions = Set(clients.map(\.session))
-            }
-        }
+    func moveSelection(by delta: Int) {
+        let count = filtered.count
+        guard count > 0 else { return }
+        selectedIndex = max(0, min(count - 1, selectedIndex + delta))
     }
 
-    // MARK: - Selection
+    func loadData() {
+        isLoading = true
+        errorMessage = nil
+        let dirs = Settings.projectDirectories
+        let all = findGitProjects(in: dirs)
+        let visits = loadVisits()
+        allProjects = scored(all, visits: visits)
+        activeSessions = Set(((try? listClients()) ?? []).map(\.session))
+        isLoading = false
+        selectedIndex = 0
+    }
 
-    private func selectProject(_ project: Project) {
+    func selectProject(_ project: Project) {
+        let sessionName = sanitizeSessionName(project.name)
         Task { @MainActor in
             do {
                 recordVisit(to: project.path)
-                let sessionName = sanitizeSessionName(project.name)
-
                 switch mode {
                 case .switchSession:
                     let found = try Ghostty.focusTab(session: sessionName)
@@ -130,7 +89,7 @@ struct SearchView: View {
                 case .replaceSession:
                     let clients = try listClients()
                     guard let client = mostRecentClient(from: clients) else {
-                        errorMessage = "No active tmux client found. Open a tmux session in Ghostty first."
+                        errorMessage = "No active tmux client. Open a tmux session in Ghostty first."
                         return
                     }
                     let existing = (try? listSessions()) ?? []
@@ -140,7 +99,6 @@ struct SearchView: View {
                     try switchClient(session: sessionName, tty: client.tty)
                     try Ghostty.focusApp()
                 }
-
                 onDismiss()
             } catch {
                 errorMessage = error.localizedDescription
@@ -149,11 +107,141 @@ struct SearchView: View {
     }
 }
 
+// MARK: - View
+
+struct SearchView: View {
+    @StateObject private var model: SearchViewModel
+    @FocusState private var searchFocused: Bool
+    @State private var keyMonitor: Any?
+
+    init(mode: SearchMode, onDismiss: @escaping () -> Void) {
+        _model = StateObject(wrappedValue: SearchViewModel(mode: mode, onDismiss: onDismiss))
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            searchBar
+            Divider()
+            resultArea
+        }
+        .frame(width: 620, height: 420)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .onChange(of: model.query) {
+            model.selectedIndex = 0
+        }
+        .onAppear {
+            searchFocused = true
+            model.loadData()
+            installKeyMonitor()
+        }
+        .onDisappear {
+            removeKeyMonitor()
+        }
+    }
+
+    // MARK: - Subviews
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField(
+                model.mode == .switchSession ? "Switch to project..." : "Replace with project...",
+                text: $model.query
+            )
+            .textFieldStyle(.plain)
+            .focused($searchFocused)
+            .font(.title3)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
+
+    @ViewBuilder
+    private var resultArea: some View {
+        if model.isLoading {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let error = model.errorMessage {
+            Text(error)
+                .foregroundStyle(.red)
+                .multilineTextAlignment(.center)
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if model.filtered.isEmpty {
+            Text(model.query.isEmpty
+                 ? "No projects found in configured directories."
+                 : "No matches for \"\(model.query)\"")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            projectList
+        }
+    }
+
+    private var projectList: some View {
+        let list = model.filtered
+        return ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(list.enumerated()), id: \.element.id) { index, project in
+                        ProjectRow(
+                            project: project,
+                            hasActiveSession: model.activeSessions.contains(sanitizeSessionName(project.name)),
+                            isSelected: index == model.selectedIndex
+                        )
+                        .id(index)
+                        .contentShape(Rectangle())
+                        .onTapGesture { model.selectProject(project) }
+                    }
+                }
+            }
+            .onChange(of: model.selectedIndex) { _, idx in
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    proxy.scrollTo(idx, anchor: .center)
+                }
+            }
+        }
+    }
+
+    // MARK: - Keyboard navigation
+
+    private func installKeyMonitor() {
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak model] event in
+            guard let model else { return event }
+            switch Int(event.keyCode) {
+            case 125: // down arrow
+                model.moveSelection(by: 1)
+                return nil
+            case 126: // up arrow
+                model.moveSelection(by: -1)
+                return nil
+            case 36, 76: // return / numpad enter
+                if let p = model.selectedProject { model.selectProject(p) }
+                return nil
+            case 53: // escape
+                model.onDismiss()
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+    }
+}
+
 // MARK: - Row
 
 struct ProjectRow: View {
     let project: Project
     let hasActiveSession: Bool
+    let isSelected: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -177,6 +265,8 @@ struct ProjectRow: View {
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
     }
 }
