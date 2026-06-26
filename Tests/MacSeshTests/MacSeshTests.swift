@@ -1,61 +1,29 @@
-import Foundation
+import Testing
 @testable import MacSeshCore
-
-nonisolated(unsafe) var failures = 0
-
-func test(_ name: String, _ body: () throws -> Void) {
-    do {
-        try body()
-        print("✓ \(name)")
-    } catch {
-        print("✗ \(name): \(error)")
-        failures += 1
-    }
-}
-
-func expect<T: Equatable>(_ actual: T, equals expected: T) throws {
-    if actual != expected {
-        throw Fail("expected \(expected), got \(actual)")
-    }
-}
-
-struct Fail: Error, CustomStringConvertible {
-    let description: String
-    init(_ d: String) { description = d }
-}
 
 // ── Shell ─────────────────────────────────────────────────────────────────────
 
-test("Shell.run returns stdout trimmed") {
+@Test func shellRunReturnsTrimmedOutput() throws {
     let out = try Shell.run("echo hello")
-    try expect(out, equals: "hello")
+    #expect(out == "hello")
 }
 
-test("Shell.run throws on non-zero exit") {
-    var threw = false
-    do {
-        _ = try Shell.run("false")
-    } catch {
-        threw = true
+@Test func shellRunThrowsOnNonZeroExit() throws {
+    #expect(throws: (any Error).self) {
+        try Shell.run("false")
     }
-    try expect(threw, equals: true)
 }
 
 // ── Tmux ──────────────────────────────────────────────────────────────────────
 
-test("sanitizeSessionName lowercases and replaces spaces") {
-    try expect(sanitizeSessionName("My Project"), equals: "my-project")
+@Test func sanitizeSessionNameLowercasesAndReplacesSpaces() {
+    #expect(sanitizeSessionName("My Project") == "my-project")
 }
 
-test("sanitizeSessionName strips leading and trailing hyphens") {
-    try expect(sanitizeSessionName("  hello  "), equals: "hello")
+@Test func sanitizeSessionNameStripsLeadingAndTrailingHyphens() {
+    #expect(sanitizeSessionName("  hello  ") == "hello")
 }
 
-test("sanitizeSessionName collapses multiple separators") {
-    try expect(sanitizeSessionName("foo/bar/baz"), equals: "foo-bar-baz")
+@Test func sanitizeSessionNameCollapsesSeparators() {
+    #expect(sanitizeSessionName("foo/bar/baz") == "foo-bar-baz")
 }
-
-// ── Run ───────────────────────────────────────────────────────────────────────
-
-print(failures == 0 ? "\nAll tests passed." : "\n\(failures) test(s) failed.")
-exit(failures > 0 ? 1 : 0)

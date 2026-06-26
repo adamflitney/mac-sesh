@@ -5,7 +5,7 @@ let package = Package(
     name: "MacSesh",
     platforms: [.macOS(.v14)],
     targets: [
-        // Core logic — importable by both the app and the test runner
+        // Core logic — importable by both the app and the test suite
         .target(
             name: "MacSeshCore",
             path: "Sources/MacSeshCore"
@@ -16,8 +16,8 @@ let package = Package(
             dependencies: ["MacSeshCore"],
             path: "Sources/MacSesh"
         ),
-        // Test runner: swift run MacSeshTests
-        .executableTarget(
+        // Test suite: swift test
+        .testTarget(
             name: "MacSeshTests",
             dependencies: ["MacSeshCore"],
             path: "Tests/MacSeshTests"
