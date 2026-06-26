@@ -9,7 +9,9 @@ let package = Package(
             name: "MacSesh",
             path: "Sources/MacSesh"
         ),
-        .testTarget(
+        // Run with: swift run MacSeshTests
+        // (swift test requires full Xcode install; this runner works with CLT)
+        .executableTarget(
             name: "MacSeshTests",
             dependencies: ["MacSesh"],
             path: "Tests/MacSeshTests"
