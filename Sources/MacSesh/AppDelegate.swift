@@ -18,8 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.button?.image = NSImage(systemSymbolName: "terminal", accessibilityDescription: "mac-sesh")
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Switch Session  \u{2726}S", action: #selector(openSwitchSession), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Replace Session  \u{2726}D", action: #selector(openReplaceSession), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Switch Session  \u{2726}W", action: #selector(openSwitchSession), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Replace Session  \u{2726}E", action: #selector(openReplaceSession), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit mac-sesh", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem?.menu = menu
@@ -31,10 +31,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Hyper key = Cmd+Ctrl+Option+Shift (Caps Lock remapped via Karabiner or similar)
         let hyper = cmdKey | controlKey | optionKey | shiftKey  // = 6912
 
-        registerGlobalHotkey(keyCode: Int(kVK_ANSI_S), modifiers: hyper) { [weak self] in
+        registerGlobalHotkey(keyCode: Int(kVK_ANSI_W), modifiers: hyper) { [weak self] in
             Task { @MainActor [weak self] in self?.openSwitchSession() }
         }
-        registerGlobalHotkey(keyCode: Int(kVK_ANSI_D), modifiers: hyper) { [weak self] in
+        registerGlobalHotkey(keyCode: Int(kVK_ANSI_E), modifiers: hyper) { [weak self] in
             Task { @MainActor [weak self] in self?.openReplaceSession() }
         }
     }
