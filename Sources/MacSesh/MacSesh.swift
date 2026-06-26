@@ -1,9 +1,16 @@
-// The Swift Programming Language
-// https://docs.swift.org/swift-book
+import AppKit
 
 @main
-struct MacSesh {
+struct MacSeshApp {
     static func main() {
-        print("Hello, world!")
+        // @main entry is always called on the main thread; MainActor.assumeIsolated
+        // lets us call @MainActor-isolated AppKit APIs without an async context.
+        MainActor.assumeIsolated {
+            let app = NSApplication.shared
+            app.setActivationPolicy(.accessory)
+            let delegate = AppDelegate()
+            app.delegate = delegate
+            app.run()
+        }
     }
 }
