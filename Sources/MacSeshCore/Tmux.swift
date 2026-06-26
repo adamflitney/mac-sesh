@@ -54,34 +54,41 @@ public func listClients() throws -> [TmuxClient] {
     return parseClients(output)
 }
 
-public func createSession(name: String, path: String) throws {
+/// Creates a new detached tmux session with windows defined by `windows`.
+/// The first window is created via `new-session`; subsequent ones via `new-window`.
+/// Focus is left on `defaultWindow` (or the first window if nil).
+public func createSession(name: String, path: String, windows: [WindowSpec], defaultWindow: String? = nil) throws {
+    guard let first = windows.first else { return }
     let s = shellQuote(name)
     let p = shellQuote(path)
-    try Shell.run("tmux new-session -d -s \(s) -c \(p) -n neovim")
-    try Shell.run("tmux send-keys -t \(shellQuote("\(name):neovim")) 'nvim .' Enter")
-    try Shell.run("tmux new-window -t \(s) -n claude -c \(p)")
-    try Shell.run("tmux send-keys -t \(shellQuote("\(name):claude")) 'claude' Enter")
-    try Shell.run("tmux new-window -t \(s) -n shell -c \(p)")
-    try Shell.run("tmux select-window -t \(shellQuote("\(name):neovim"))")
+
+    try Shell.run("tmux new-session -d -s \(s) -c \(p) -n \(shellQuote(first.name))")
+    if let cmd = first.command {
+        try Shell.run("tmux send-keys -t \(shellQuote("\(name):\(first.name)")) \(shellQuote(cmd)) Enter")
+    }
+
+    for spec in windows.dropFirst() {
+        try Shell.run("tmux new-window -t \(s) -n \(shellQuote(spec.name)) -c \(p)")
+        if let cmd = spec.command {
+            try Shell.run("tmux send-keys -t \(shellQuote("\(name):\(spec.name)")) \(shellQuote(cmd)) Enter")
+        }
+    }
+
+    let focusWindow = defaultWindow ?? first.name
+    try Shell.run("tmux select-window -t \(shellQuote("\(name):\(focusWindow)"))")
 }
 
-/// Adds any missing windows from the standard 3-window layout without
-/// touching windows the user has already set up.
-public func ensureSessionWindows(name: String, path: String) throws {
+/// Adds any missing windows from `windows` without touching existing ones.
+public func ensureSessionWindows(name: String, path: String, windows: [WindowSpec]) throws {
     let existing = Set(try listWindows(session: name))
     let s = shellQuote(name)
     let p = shellQuote(path)
 
-    if !existing.contains("neovim") {
-        try Shell.run("tmux new-window -t \(s) -n neovim -c \(p)")
-        try Shell.run("tmux send-keys -t \(shellQuote("\(name):neovim")) 'nvim .' Enter")
-    }
-    if !existing.contains("claude") {
-        try Shell.run("tmux new-window -t \(s) -n claude -c \(p)")
-        try Shell.run("tmux send-keys -t \(shellQuote("\(name):claude")) 'claude' Enter")
-    }
-    if !existing.contains("shell") {
-        try Shell.run("tmux new-window -t \(s) -n shell -c \(p)")
+    for spec in windows where !existing.contains(spec.name) {
+        try Shell.run("tmux new-window -t \(s) -n \(shellQuote(spec.name)) -c \(p)")
+        if let cmd = spec.command {
+            try Shell.run("tmux send-keys -t \(shellQuote("\(name):\(spec.name)")) \(shellQuote(cmd)) Enter")
+        }
     }
 }
 

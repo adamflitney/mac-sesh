@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import MacSeshCore
 
 @MainActor
 final class SearchWindow: NSPanel {
@@ -30,8 +31,8 @@ final class SearchWindow: NSPanel {
         orderOut(nil)
     }
 
-    func present(mode: SearchMode) {
-        let view = SearchView(mode: mode, onDismiss: { [weak self] in
+    func present(mode: SearchMode, config: Config) {
+        let view = SearchView(mode: mode, config: config, onDismiss: { [weak self] in
             self?.orderOut(nil)
         })
         contentViewController = NSHostingController(rootView: view)

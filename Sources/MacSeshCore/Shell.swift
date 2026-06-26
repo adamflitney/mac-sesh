@@ -3,6 +3,7 @@ import Foundation
 enum Shell {
     /// Runs a shell command and returns trimmed stdout.
     /// Throws if the process exits with a non-zero status.
+    @discardableResult
     static func run(_ command: String) throws -> String {
         let process = Process()
         let pipe = Pipe()

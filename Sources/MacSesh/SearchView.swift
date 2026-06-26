@@ -18,10 +18,12 @@ final class SearchViewModel: ObservableObject {
     @Published var isLoading = true
 
     let mode: SearchMode
+    let config: Config
     let onDismiss: () -> Void
 
-    init(mode: SearchMode, onDismiss: @escaping () -> Void) {
+    init(mode: SearchMode, config: Config, onDismiss: @escaping () -> Void) {
         self.mode = mode
+        self.config = config
         self.onDismiss = onDismiss
     }
 
@@ -61,8 +63,8 @@ final class SearchViewModel: ObservableObject {
     func loadData() {
         isLoading = true
         errorMessage = nil
-        let dirs = Settings.projectDirectories
-        let all = findGitProjects(in: dirs)
+        let all = findGitProjects(in: config.resolvedDirectories)
+            .filter { !config.isExcluded($0.path) }
         let visits = loadVisits()
         allProjects = scored(all, visits: visits)
         activeSessions = Set(((try? listClients()) ?? []).map(\.session))
@@ -72,6 +74,8 @@ final class SearchViewModel: ObservableObject {
 
     func selectProject(_ project: Project) {
         let sessionName = sanitizeSessionName(project.name)
+        let windows = config.session.windows
+        let defaultWindow = config.session.defaultWindow
         Task { @MainActor in
             do {
                 recordVisit(to: project.path)
@@ -81,7 +85,8 @@ final class SearchViewModel: ObservableObject {
                     if !found {
                         let existing = (try? listSessions()) ?? []
                         if !existing.contains(sessionName) {
-                            try createSession(name: sessionName, path: project.path)
+                            try createSession(name: sessionName, path: project.path,
+                                              windows: windows, defaultWindow: defaultWindow)
                         }
                         try Ghostty.openTab(session: sessionName)
                     }
@@ -94,7 +99,8 @@ final class SearchViewModel: ObservableObject {
                     }
                     let existing = (try? listSessions()) ?? []
                     if !existing.contains(sessionName) {
-                        try createSession(name: sessionName, path: project.path)
+                        try createSession(name: sessionName, path: project.path,
+                                          windows: windows, defaultWindow: defaultWindow)
                     }
                     try switchClient(session: sessionName, tty: client.tty)
                     try Ghostty.focusApp()
@@ -114,8 +120,8 @@ struct SearchView: View {
     @FocusState private var searchFocused: Bool
     @State private var keyMonitor: Any?
 
-    init(mode: SearchMode, onDismiss: @escaping () -> Void) {
-        _model = StateObject(wrappedValue: SearchViewModel(mode: mode, onDismiss: onDismiss))
+    init(mode: SearchMode, config: Config, onDismiss: @escaping () -> Void) {
+        _model = StateObject(wrappedValue: SearchViewModel(mode: mode, config: config, onDismiss: onDismiss))
     }
 
     var body: some View {

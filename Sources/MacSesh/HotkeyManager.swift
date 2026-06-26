@@ -2,8 +2,9 @@ import Carbon.HIToolbox
 import Foundation
 
 // Carbon event callbacks are C function pointers and cannot capture Swift context.
-// We store handler closures in a global dictionary keyed by hotkey ID instead.
+// We store handler closures and hotkey refs in global dictionaries keyed by ID.
 nonisolated(unsafe) private var hotkeyHandlers: [UInt32: () -> Void] = [:]
+nonisolated(unsafe) private var hotkeyRefs: [UInt32: EventHotKeyRef] = [:]
 nonisolated(unsafe) private var carbonEventHandler: EventHandlerRef?
 nonisolated(unsafe) private var nextHotkeyID: UInt32 = 1
 
@@ -18,14 +19,7 @@ private let carbonCallback: EventHandlerUPP = { _, event, _ -> OSStatus in
 }
 
 /// Registers a global hotkey using Carbon's RegisterEventHotKey.
-///
-/// Unlike NSEvent monitors, Carbon hotkeys do not require Accessibility or
-/// Input Monitoring permission — they work as soon as the app is running.
-///
-/// - Parameters:
-///   - keyCode: A Carbon virtual key code (e.g. kVK_ANSI_S = 1, kVK_ANSI_D = 2).
-///   - modifiers: Carbon modifier mask (e.g. cmdKey | shiftKey | optionKey | controlKey).
-///   - handler: Called on the main thread when the hotkey fires.
+/// Unlike NSEvent monitors, Carbon hotkeys require no Accessibility permission.
 func registerGlobalHotkey(keyCode: Int, modifiers: Int, handler: @escaping () -> Void) {
     if carbonEventHandler == nil {
         var spec = EventTypeSpec(
@@ -44,4 +38,15 @@ func registerGlobalHotkey(keyCode: Int, modifiers: Int, handler: @escaping () ->
     var ref: EventHotKeyRef?
     RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hkID,
                         GetApplicationEventTarget(), 0, &ref)
+    if let ref { hotkeyRefs[id] = ref }
+}
+
+/// Unregisters all previously registered hotkeys, clearing the handler table.
+/// Call this before re-registering with a new config.
+func unregisterAllHotkeys() {
+    for (id, ref) in hotkeyRefs {
+        UnregisterEventHotKey(ref)
+        hotkeyHandlers.removeValue(forKey: id)
+    }
+    hotkeyRefs.removeAll()
 }
