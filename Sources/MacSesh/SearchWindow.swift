@@ -18,6 +18,7 @@ final class SearchWindow: NSPanel {
         hasShadow = true
         hidesOnDeactivate = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        animationBehavior = .none
     }
 
     // NSPanel with .borderless won't become key by default; override to allow
@@ -35,10 +36,13 @@ final class SearchWindow: NSPanel {
         })
         contentViewController = NSHostingController(rootView: view)
         center()
-        // Nudge the window above center — Raycast-style placement
-        if let screen = NSScreen.main {
-            let y = screen.visibleFrame.midY + 60
-            setFrameOrigin(NSPoint(x: frame.minX, y: y))
+        // Always position on the primary display (screens.first = the one with the menu bar),
+        // not whichever screen happens to have the focused window right now.
+        if let screen = NSScreen.screens.first {
+            let sf = screen.visibleFrame
+            let x = sf.midX - frame.width / 2
+            let y = sf.midY + 60
+            setFrameOrigin(NSPoint(x: x, y: y))
         }
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
