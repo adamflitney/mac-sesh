@@ -25,5 +25,7 @@
     <true/>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2025 Adam Flitney</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
 </dict>
 </plist>

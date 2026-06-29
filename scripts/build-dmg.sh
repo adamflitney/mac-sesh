@@ -20,6 +20,7 @@ mkdir -p "${BUNDLE}/Contents/Resources"
 
 cp ".build/release/${APP_NAME}" "${BUNDLE}/Contents/MacOS/"
 cp "Resources/Info.plist"       "${BUNDLE}/Contents/"
+[ -f "Resources/AppIcon.icns" ] && cp "Resources/AppIcon.icns" "${BUNDLE}/Contents/Resources/"
 
 echo "→ Ad-hoc code signing…"
 codesign --force --deep --sign - "${BUNDLE}"
